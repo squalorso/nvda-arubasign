@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<title>ArubaSign - Campi firma</title>
+</head>
+<body>
+<h1>ArubaSign - Campi firma</h1>
+<p>Questo addon rileva i campi firma presenti nel documento aperto nella vista
+«Firma grafica» di ArubaSign e permette di apporre la firma grafica su ciascun
+campo, o su tutti in sequenza, senza usare il mouse.</p>
+
+<h2>Uso</h2>
+<ol>
+<li>In ArubaSign carica il documento da firmare, verifica che la casella
+«Firma Grafica» sia attivata e attiva «Prosegui e firma»: si apre la schermata
+di posizionamento della firma.</li>
+<li>Premi <kbd>NVDA+Shift+S</kbd>. Si apre una finestra con l'elenco dei campi
+firma del documento (nome del campo e pagina), per tutte le pagine.</li>
+<li>Con Invio sul campo selezionato la firma grafica viene apposta esattamente
+in quel campo. Il pulsante «Firma tutti i campi» le appone tutte in sequenza.</li>
+<li>Il pulsante «Attiva Prosegui» attiva il pulsante Prosegui di ArubaSign, da
+cui continua la normale procedura (per la firma remota: credenziali e OTP).</li>
+</ol>
+
+<h2>Note</h2>
+<ul>
+<li>Fuori da ArubaSign, <kbd>NVDA+Shift+S</kbd> conserva la sua funzione
+standard di NVDA: modalità riposo nel layout desktop, lettura della selezione
+corrente nel layout laptop. Dentro ArubaSign il comando dell'addon ha la
+precedenza. Il gesto è personalizzabile da Preferenze &gt; Gesti di
+immissione, categoria «ArubaSign - Campi firma».</li>
+<li>I campi compaiono solo se il documento PDF contiene campi firma
+predisposti. Se il documento non ne ha, la firma va posizionata a mano come di
+consueto.</li>
+<li>L'indicazione «firmato in questa sessione» si riferisce ai campi cliccati
+tramite l'addon dall'apertura del documento corrente.</li>
+</ul>
+
+<h2>Compatibilità</h2>
+<p>Provato con ArubaSign 24.1.1 (interfaccia WebView2) e NVDA 2025.3.</p>
+</body>
+</html>

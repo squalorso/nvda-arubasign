@@ -1,0 +1,6 @@
+dist/
+__pycache__/
+*.pyc
+# I documenti firmati contengono dati personali: mai nel repository.
+*_signed*.pdf
+*_signed*.p7m

@@ -58,6 +58,18 @@ SCROLL_TO_CLICK_DELAY = 600
 BETWEEN_FIELDS_DELAY = 800
 
 user32 = ctypes.windll.user32
+# Firme esplicite: con NVDA a 64 bit (2026.1+) gli handle di finestra sono
+# puntatori a 64 bit e non vanno lasciati al default ctypes (int a 32 bit).
+user32.EnumWindows.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+user32.EnumWindows.restype = ctypes.c_bool
+user32.IsWindowVisible.argtypes = [ctypes.c_void_p]
+user32.IsWindowVisible.restype = ctypes.c_bool
+user32.GetWindowThreadProcessId.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_ulong)]
+user32.GetWindowThreadProcessId.restype = ctypes.c_ulong
+user32.GetClassNameW.argtypes = [ctypes.c_void_p, ctypes.c_wchar_p, ctypes.c_int]
+user32.GetClassNameW.restype = ctypes.c_int
+user32.SetForegroundWindow.argtypes = [ctypes.c_void_p]
+user32.SetForegroundWindow.restype = ctypes.c_bool
 
 
 class CampoFirma(object):
@@ -102,7 +114,7 @@ def _trovaFinestraArubaSign():
 				return False
 		return True
 
-	user32.EnumWindows(callback, 0)
+	user32.EnumWindows(ctypes.cast(callback, ctypes.c_void_p), None)
 	return risultato[0] if risultato else None
 
 

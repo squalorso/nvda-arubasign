@@ -69,7 +69,7 @@ Il pacchetto viene creato in `dist\`.
 
 - ArubaSign 24.1.1 (interfaccia WebView2); versioni precedenti con la vecchia
   interfaccia SWT nativa non sono supportate.
-- NVDA 2023.1 → 2025.3 (testato con 2025.3.2).
+- NVDA 2023.1 → 2026.1, incluse le versioni a 64 bit (dalla 2026.1); testato sul campo con la 2025.3.2.
 
 ## Licenza
 

@@ -69,9 +69,11 @@ Il pacchetto viene creato in `dist\`.
 
 - ArubaSign 24.1.1 (interfaccia WebView2); versioni precedenti con la vecchia
   interfaccia SWT nativa non sono supportate.
-- NVDA 2026.1 o successiva. Il requisito riflette ciò che è realmente provato:
-  la risoluzione dell'app dentro WebView2 esiste da NVDA 2024.3, ma le versioni
-  precedenti alla 2026.1 non sono verificate e non vengono dichiarate.
+- NVDA da 2024.3 a 2026.1. La soglia minima deriva da un requisito tecnico
+  preciso: NVDA sa attribuire l'interfaccia WebView2 di ArubaSign alla sua
+  applicazione solo dalla 2024.3 in poi; sotto quella versione il comando
+  non si attiverebbe. Provato con NVDA 2026.1.1 (installata) e con la serie
+  2025 (copia portable).
 
 ## Licenza
 

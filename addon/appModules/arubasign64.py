@@ -1,43 +1,45 @@
 # -*- coding: UTF-8 -*-
 # ArubaSign - Campi firma
-# Addon NVDA per rilevare i campi firma nella vista "Firma grafica" di ArubaSign
-# e apporvi la firma grafica con un clic simulato, senza usare il mouse.
+# App module NVDA per ArubaSign: rileva i campi firma nella vista "Firma
+# grafica" e permette di apporvi la firma grafica con un clic simulato.
 #
 # Copyright (C) 2026 Alexandru Vida
 # Rilasciato sotto GNU General Public License v2.
 #
 # Come funziona:
 # ArubaSign (dalla versione 24 circa) disegna la propria interfaccia in HTML
-# dentro un controllo WebView2 (Chromium). Nella vista di posizionamento della
-# firma grafica, ogni campo firma del PDF viene esposto nell'albero
-# UI Automation come elemento con AutomationId "PDFSignatureAnnotation_<nome>"
-# e classe "pdf_signature_annotation", completo di rettangolo sullo schermo.
-# L'addon enumera questi elementi, li porta in vista con ScrollItemPattern
-# (ArubaSign cambia pagina da solo) e simula un clic sinistro al centro del
-# rettangolo: ArubaSign appone la firma grafica in quel punto senza ulteriori
-# conferme.
+# dentro un controllo WebView2. Gli oggetti con il focus appartengono quindi al
+# processo msedgewebview2.exe, ma dal 2024.3 NVDA risale da solo al processo
+# padre (ArubaSign64.exe), per cui questo app module riceve regolarmente focus
+# e comandi. Nella vista di posizionamento della firma grafica ogni campo firma
+# del PDF è esposto via UI Automation come elemento con AutomationId
+# "PDFSignatureAnnotation_<nome>" e classe "pdf_signature_annotation", completo
+# di rettangolo sullo schermo: l'app module li enumera, li porta in vista con
+# ScrollItemPattern (ArubaSign cambia pagina da solo) e simula un clic sinistro
+# al centro del rettangolo; ArubaSign appone la firma senza altre conferme.
+#
+# Essendo un app module, il comando NVDA+Shift+S esiste SOLO dentro ArubaSign:
+# fuori dall'applicazione NVDA conserva la propria funzione nativa.
 
-import ctypes
 import re
 
 import wx
 
+import addonHandler
 import api
 import appModuleHandler
-import globalCommands
-import globalPluginHandler
 import gui
 import mouseHandler
-import scriptHandler
 import tones
 import ui
 import UIAHandler
 import winUser
+from comtypes import COMError
 from logHandler import log
 from scriptHandler import script
 
 try:
-	UIA = UIAHandler.UIA  # NVDA moderni: modulo comtypes.gen.UIAutomationClient
+	UIA = UIAHandler.UIA  # modulo comtypes.gen.UIAutomationClient
 except AttributeError:
 	import comtypes.gen.UIAutomationClient as UIA
 
@@ -52,24 +54,9 @@ ANNOTATION_PREFIX = "PDFSignatureAnnotation_"
 ANNOTATION_CLASS = "pdf_signature_annotation"
 PROSEGUI_BUTTON_ID = "pdfView_footer_continue_button"
 SIGN_LAYER_RE = re.compile(r"page_(\d+)_signLayer")
-ARUBASIGN_EXE = "arubasign64.exe"
-# Attese (in millisecondi) fra scorrimento e clic: il viewer anima lo scroll.
+# Attese (in millisecondi): il viewer anima lo scorrimento prima del clic.
 SCROLL_TO_CLICK_DELAY = 600
 BETWEEN_FIELDS_DELAY = 800
-
-user32 = ctypes.windll.user32
-# Firme esplicite: con NVDA a 64 bit (2026.1+) gli handle di finestra sono
-# puntatori a 64 bit e non vanno lasciati al default ctypes (int a 32 bit).
-user32.EnumWindows.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-user32.EnumWindows.restype = ctypes.c_bool
-user32.IsWindowVisible.argtypes = [ctypes.c_void_p]
-user32.IsWindowVisible.restype = ctypes.c_bool
-user32.GetWindowThreadProcessId.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_ulong)]
-user32.GetWindowThreadProcessId.restype = ctypes.c_ulong
-user32.GetClassNameW.argtypes = [ctypes.c_void_p, ctypes.c_wchar_p, ctypes.c_int]
-user32.GetClassNameW.restype = ctypes.c_int
-user32.SetForegroundWindow.argtypes = [ctypes.c_void_p]
-user32.SetForegroundWindow.restype = ctypes.c_bool
 
 
 class CampoFirma(object):
@@ -85,45 +72,18 @@ class CampoFirma(object):
 		self.left = left
 
 	def etichetta(self, firmato):
-		# Etichetta mostrata nell'elenco della finestra di dialogo.
 		testo = "{nome}, pagina {pagina}".format(nome=self.nome, pagina=self.page)
 		if firmato:
 			testo += " (firmato in questa sessione)"
 		return testo
 
 
-def _trovaFinestraArubaSign():
-	"""Restituisce l'handle della finestra principale di ArubaSign, o None."""
-	risultato = []
+class AppModule(appModuleHandler.AppModule):
 
-	@ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
-	def callback(hwnd, lParam):
-		if not user32.IsWindowVisible(hwnd):
-			return True
-		pid = ctypes.c_ulong()
-		user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
-		try:
-			appName = appModuleHandler.getAppNameFromProcessID(pid.value, True)
-		except Exception:
-			return True
-		if appName and appName.lower() == ARUBASIGN_EXE:
-			buf = ctypes.create_unicode_buffer(256)
-			user32.GetClassNameW(hwnd, buf, 256)
-			if buf.value.startswith("SWT_Window"):
-				risultato.append(hwnd)
-				return False
-		return True
+	scriptCategory = addonHandler.getCodeAddon().manifest["summary"]
 
-	user32.EnumWindows(ctypes.cast(callback, ctypes.c_void_p), None)
-	return risultato[0] if risultato else None
-
-
-class GlobalPlugin(globalPluginHandler.GlobalPlugin):
-
-	scriptCategory = "ArubaSign - Campi firma"
-
-	def __init__(self):
-		super(GlobalPlugin, self).__init__()
+	def __init__(self, *args, **kwargs):
+		super().__init__(*args, **kwargs)
 		# AutomationId dei campi firmati in questa sessione, con una chiave che
 		# identifica il documento corrente per azzerare lo stato quando cambia.
 		self._firmati = set()
@@ -134,18 +94,26 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 	def terminate(self):
 		if self._timer:
 			self._timer.Stop()
-		super(GlobalPlugin, self).terminate()
+		if self._dialogo:
+			try:
+				self._dialogo.Destroy()
+			except RuntimeError:
+				pass  # già distrutto lato wx
+			self._dialogo = None
+		super().terminate()
 
 	# ------------------------------------------------------------------
 	# Ricerca degli elementi via UI Automation
 
 	def _radiceArubaSign(self):
-		hwnd = _trovaFinestraArubaSign()
+		"""Handle ed elemento UIA della finestra di ArubaSign in primo piano."""
+		primoPiano = api.getForegroundObject()
+		hwnd = getattr(primoPiano, "windowHandle", None)
 		if not hwnd:
 			return None, None
 		try:
 			radice = UIAHandler.handler.clientObject.ElementFromHandle(hwnd)
-		except Exception:
+		except (COMError, OSError):
 			log.debugWarning("ElementFromHandle fallita per ArubaSign", exc_info=True)
 			return None, None
 		return hwnd, radice
@@ -156,7 +124,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 		condizione = client.CreatePropertyCondition(UIA_ClassNamePropertyId, ANNOTATION_CLASS)
 		try:
 			trovati = radice.FindAll(TreeScope_Descendants, condizione)
-		except Exception:
+		except COMError:
 			log.debugWarning("FindAll delle annotazioni firma fallita", exc_info=True)
 			return []
 		campi = []
@@ -165,7 +133,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 			el = trovati.GetElement(i)
 			try:
 				automationId = el.CurrentAutomationId
-			except Exception:
+			except COMError:
 				continue
 			if not automationId.startswith(ANNOTATION_PREFIX):
 				continue
@@ -173,7 +141,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 			try:
 				rett = el.CurrentBoundingRectangle
 				top, left = rett.top, rett.left
-			except Exception:
+			except COMError:
 				top, left = 0, 0
 			campi.append(CampoFirma(el, automationId, pagina, top, left))
 		campi.sort(key=lambda c: (c.page, c.top, c.left))
@@ -190,7 +158,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 				match = SIGN_LAYER_RE.match(corrente.CurrentAutomationId or "")
 				if match:
 					return int(match.group(1)) + 1
-			except Exception:
+			except COMError:
 				break
 		return 0
 
@@ -199,17 +167,11 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 		condizione = client.CreatePropertyCondition(UIA_AutomationIdPropertyId, PROSEGUI_BUTTON_ID)
 		try:
 			return radice.FindFirst(TreeScope_Descendants, condizione)
-		except Exception:
+		except COMError:
 			return None
 
 	# ------------------------------------------------------------------
 	# Azioni sui campi
-
-	def _portaInPrimoPiano(self, hwnd):
-		try:
-			winUser.setForegroundWindow(hwnd)
-		except Exception:
-			user32.SetForegroundWindow(hwnd)
 
 	def _scorriAlCampo(self, campo):
 		punk = campo.element.GetCurrentPattern(UIA_ScrollItemPatternId)
@@ -228,10 +190,13 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 
 	def firmaCampo(self, hwnd, campo, alTermine=None):
 		"""Porta il campo in vista e ci clicca sopra. Asincrono (timer wx)."""
-		self._portaInPrimoPiano(hwnd)
+		try:
+			winUser.setForegroundWindow(hwnd)
+		except OSError:
+			pass  # la finestra è di norma già in primo piano
 		try:
 			self._scorriAlCampo(campo)
-		except Exception:
+		except (COMError, ValueError):
 			log.error("ScrollIntoView fallita per %s" % campo.automationId, exc_info=True)
 			ui.message("Impossibile raggiungere il campo {0}.".format(campo.nome))
 			return
@@ -239,7 +204,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 		def dopoScroll():
 			try:
 				self._cliccaCampo(campo)
-			except Exception:
+			except (COMError, OSError):
 				log.error("Clic fallito per %s" % campo.automationId, exc_info=True)
 				ui.message("Impossibile cliccare sul campo {0}.".format(campo.nome))
 				return
@@ -269,11 +234,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 				)
 				return
 			campo = coda.pop(0)
-			self.firmaCampo(
-				hwnd,
-				campo,
-				alTermine=lambda: self._prossimoPasso(passo),
-			)
+			self.firmaCampo(hwnd, campo, alTermine=lambda: self._prossimoPasso(passo))
 
 		passo()
 
@@ -287,7 +248,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 			return
 		try:
 			classe = pulsante.CurrentClassName or ""
-		except Exception:
+		except COMError:
 			classe = ""
 		if "disabled" in classe:
 			ui.message("Il pulsante Prosegui è disattivato: apponi prima almeno una firma.")
@@ -296,45 +257,18 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 			punk = pulsante.GetCurrentPattern(UIA_InvokePatternId)
 			punk.QueryInterface(UIA.IUIAutomationInvokePattern).Invoke()
 			ui.message("Prosegui attivato. Continua con la procedura di firma di ArubaSign.")
-		except Exception:
+		except (COMError, ValueError):
 			log.error("Invoke di Prosegui fallita", exc_info=True)
 			ui.message("Impossibile attivare il pulsante Prosegui.")
 
 	# ------------------------------------------------------------------
-	# Script principale
+	# Script
 
 	@script(
-		description=(
-			"Apre l'elenco dei campi firma del documento nella vista Firma grafica di ArubaSign. "
-			"Fuori da ArubaSign esegue la normale funzione di NVDA associata al gesto "
-			"(modalità riposo nel layout desktop, lettura della selezione nel layout laptop)."
-		),
-		# Oltre alla forma normalizzata si registra esplicitamente la variante
-		# con blocco maiuscole, per gli utenti che usano CapsLock come tasto NVDA.
-		gestures=("kb:NVDA+shift+s", "kb:capslock+shift+s"),
+		description="Apre l'elenco dei campi firma del documento",
+		gesture="kb:NVDA+shift+s",
 	)
 	def script_elencoCampiFirma(self, gesture):
-		primoPiano = api.getForegroundObject()
-		appName = ""
-		try:
-			appName = primoPiano.appModule.appName.lower()
-		except Exception:
-			pass
-		if not appName.startswith("arubasign"):
-			# Non siamo in ArubaSign: esegue la funzione che NVDA assegna di suo
-			# a questo gesto nel layout tastiera in uso (desktop: modalità
-			# riposo; laptop: lettura della selezione corrente).
-			originale = None
-			try:
-				originale = globalCommands.commands.getScript(gesture)
-			except Exception:
-				pass
-			if originale:
-				scriptHandler.executeScript(originale, gesture)
-			else:
-				globalCommands.commands.script_toggleCurrentAppSleepMode(gesture)
-			return
-
 		hwnd, radice = self._radiceArubaSign()
 		if not radice:
 			ui.message("Finestra di ArubaSign non trovata.")
@@ -358,7 +292,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 		if self._dialogo:
 			try:
 				self._dialogo.Destroy()
-			except Exception:
+			except RuntimeError:
 				pass
 			self._dialogo = None
 		self._dialogo = DialogoCampiFirma(self, hwnd, radice, campi)
@@ -371,11 +305,9 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 class DialogoCampiFirma(wx.Dialog):
 	"""Finestra con l'elenco dei campi firma e i pulsanti di azione."""
 
-	def __init__(self, plugin, hwnd, radice, campi):
-		super(DialogoCampiFirma, self).__init__(
-			gui.mainFrame, title="Campi firma del documento - ArubaSign"
-		)
-		self.plugin = plugin
+	def __init__(self, modulo, hwnd, radice, campi):
+		super().__init__(gui.mainFrame, title="Campi firma del documento - ArubaSign")
+		self.modulo = modulo
 		self.hwnd = hwnd
 		self.radice = radice
 		self.campi = campi
@@ -414,7 +346,7 @@ class DialogoCampiFirma(wx.Dialog):
 		self.CentreOnScreen()
 
 	def _etichette(self):
-		return [c.etichetta(c.automationId in self.plugin._firmati) for c in self.campi]
+		return [c.etichetta(c.automationId in self.modulo._firmati) for c in self.campi]
 
 	def onTasto(self, evento):
 		codice = evento.GetKeyCode()
@@ -430,7 +362,7 @@ class DialogoCampiFirma(wx.Dialog):
 		# avviene con ArubaSign in primo piano.
 		self.Hide()
 		self.Destroy()
-		self.plugin._dialogo = None
+		self.modulo._dialogo = None
 		wx.CallAfter(azione)
 
 	def onFirma(self, evento):
@@ -439,15 +371,15 @@ class DialogoCampiFirma(wx.Dialog):
 			ui.message("Seleziona prima un campo dall'elenco.")
 			return
 		campo = self.campi[indice]
-		self._chiudiEd(lambda: self.plugin.firmaCampo(self.hwnd, campo))
+		self._chiudiEd(lambda: self.modulo.firmaCampo(self.hwnd, campo))
 
 	def onFirmaTutti(self, evento):
-		self._chiudiEd(lambda: self.plugin.firmaTutti(self.hwnd, self.campi))
+		self._chiudiEd(lambda: self.modulo.firmaTutti(self.hwnd, self.campi))
 
 	def onProsegui(self, evento):
-		self._chiudiEd(lambda: self.plugin.attivaProsegui(self.radice))
+		self._chiudiEd(lambda: self.modulo.attivaProsegui(self.radice))
 
 	def onChiudi(self, evento):
 		self.Hide()
 		self.Destroy()
-		self.plugin._dialogo = None
+		self.modulo._dialogo = None

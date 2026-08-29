@@ -33,11 +33,11 @@ il rettangolo esatto sullo schermo, per tutte le pagine. Questo addon:
    «Attiva Prosegui» per continuare con la normale procedura di firma
    (credenziali e OTP per la firma remota — l'addon non tocca mai le credenziali).
 
-Fuori da ArubaSign, NVDA+Shift+S conserva la funzione standard di NVDA nel
-layout in uso (modalità riposo nel layout desktop, lettura della selezione
-corrente nel layout laptop); dentro ArubaSign il comando dell'addon ha la
-precedenza. Il gesto è personalizzabile da Preferenze → Gesti di immissione,
-categoria «ArubaSign - Campi firma».
+L'addon è un app module: il comando NVDA+Shift+S esiste solo dentro
+ArubaSign, e fuori dall'applicazione NVDA si comporta esattamente come se
+l'addon non ci fosse. Il gesto è personalizzabile da Preferenze → Gesti di
+immissione, categoria «ArubaSign - Campi firma» (con ArubaSign in primo
+piano).
 
 ## Installazione
 
@@ -59,7 +59,7 @@ Il pacchetto viene creato in `dist\`.
 ## Struttura del progetto
 
 - `addon\manifest.ini` — metadati dell'addon
-- `addon\globalPlugins\arubaSignCampiFirma.py` — tutto il codice
+- `addon\appModules\arubasign64.py` — tutto il codice (app module: attivo solo dentro ArubaSign)
 - `addon\doc\it\readme.html` — guida mostrata dal gestore componenti di NVDA
 - `test\contratto_prova.pdf` — PDF di prova con 3 campi firma (2 pagine)
 - `tools\build-test-pdf.ps1` — script che rigenera il PDF di prova
@@ -69,7 +69,9 @@ Il pacchetto viene creato in `dist\`.
 
 - ArubaSign 24.1.1 (interfaccia WebView2); versioni precedenti con la vecchia
   interfaccia SWT nativa non sono supportate.
-- NVDA 2023.1 → 2026.1, incluse le versioni a 64 bit (dalla 2026.1); testato sul campo con la 2025.3.2.
+- NVDA 2026.1 o successiva. Il requisito riflette ciò che è realmente provato:
+  la risoluzione dell'app dentro WebView2 esiste da NVDA 2024.3, ma le versioni
+  precedenti alla 2026.1 non sono verificate e non vengono dichiarate.
 
 ## Licenza
 
